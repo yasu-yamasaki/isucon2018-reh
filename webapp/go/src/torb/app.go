@@ -296,9 +296,13 @@ func fillinAdministrator(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 func validateRank(rank string) bool {
-	var count int
-	db.QueryRow("SELECT COUNT(*) FROM sheets WHERE `rank` = ?", rank).Scan(&count)
-	return count > 0
+	s := []string{"S", "A", "B", "C"}
+	for _, v := range s {
+		if rank == v {
+			return true
+		}
+	}
+	return false
 }
 
 type Renderer struct {
@@ -458,7 +462,7 @@ func main() {
 			rawEvent.Sheets = nil
 			rawEvent.Total = 0
 			rawEvent.Remains = 0
-			
+
 			reservation.Event = &rawEvent
 			reservation.SheetRank = sheet.Rank
 			reservation.SheetNum = sheet.Num
@@ -615,12 +619,7 @@ func main() {
 			return err
 		}
 		event, err := getEvent(ctx, rawEvent, user.ID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return resError(c, "invalid_event", 404)
-			}
-			return err
-		} else if !event.PublicFg {
+		if !event.PublicFg {
 			return resError(c, "invalid_event", 404)
 		}
 
