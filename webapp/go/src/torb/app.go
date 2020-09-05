@@ -251,11 +251,12 @@ func getEvent(ctx context.Context, event Event, loginUserID int64, cache bool) (
 
 		ress[reservation.SheetID] = reservation
 	}
-	println(ress)
+	println(len(ress))
 
 	for _, sheets := range ev.Sheets {
 		for _, s := range sheets.Detail {
 			reservation, ok := ress[s.ID]
+			println(ok)
 			if ok {
 				s.ReservedUserId = reservation.UserID
 				s.Mine = s.ReservedUserId == loginUserID
