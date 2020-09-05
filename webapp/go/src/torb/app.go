@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	_ "net/http/pprof"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
