@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS reservations (
     KEY event_id_and_sheet_id_idx (event_id, sheet_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE INDEX reservations_user_id ON reservations(user_id);
+
 CREATE TABLE IF NOT EXISTS administrators (
     id          INTEGER UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     nickname    VARCHAR(128) NOT NULL,
