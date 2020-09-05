@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"net/http"
@@ -259,7 +260,18 @@ func (a *Event) clone() *Event {
 	return &copy
 }
 
+var m = new(sync.Mutex)
+
 func _getEvent(ctx context.Context, event Event, cache bool) (*Event, error) {
+	if cache {
+		cv, found := cch.Get("event." + strconv.FormatInt(event.ID, 10))
+		if found {
+			ev := cv.(Event)
+			return ev.clone(), nil
+		}
+	}
+	m.Lock()
+	defer m.Unlock()
 	if cache {
 		cv, found := cch.Get("event." + strconv.FormatInt(event.ID, 10))
 		if found {
