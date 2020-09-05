@@ -270,9 +270,10 @@ func _getEvent(ctx context.Context, event Event, cache bool) (*Event, error) {
 			return ev.clone(), nil
 		}
 	}
-	m.Lock()
-	defer m.Unlock()
 	if cache {
+		m.Lock()
+		defer m.Unlock()
+		
 		cv, found := cch.Get("event." + strconv.FormatInt(event.ID, 10))
 		if found {
 			ev := cv.(Event)
