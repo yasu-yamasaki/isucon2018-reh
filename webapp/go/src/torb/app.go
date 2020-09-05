@@ -235,7 +235,7 @@ func getEvent(ctx context.Context, event Event, loginUserID int64) (*Event, erro
 		"C": &Sheets{},
 	}
 
-	rows, err := db.QueryContext(ctx, "select * FROM sheets ORDER BY `rank`, num")
+	rows, err := db.QueryContext(ctx, "select * FROM sheets ORDER BY num")
 	if err != nil {
 		return nil, err
 	}
