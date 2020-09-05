@@ -356,7 +356,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	cch := cache.New(500*time.Millisecond, 500*time.Millisecond)
+	cch = cache.New(500*time.Millisecond, 500*time.Millisecond)
 
 	e := echo.New()
 
@@ -1060,4 +1060,4 @@ func resError(c echo.Context, e string, status int) error {
 	return c.JSON(status, map[string]string{"error": e})
 }
 
-var cch cache.Cache
+var cch *cache.Cache
