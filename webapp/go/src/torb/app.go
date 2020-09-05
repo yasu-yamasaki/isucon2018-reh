@@ -330,7 +330,7 @@ func main() {
 	)
 
 	var err error
-	db, err := sql.Open("mysql", dsn)
+	db, err = sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
