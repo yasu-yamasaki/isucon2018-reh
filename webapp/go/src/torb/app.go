@@ -241,7 +241,7 @@ func getEvent(event Event, loginUserID int64) (*Event, error) {
 		"C": &Sheets{},
 	}
 
-	rows, err := db.Query("SELECT * FROM sheets ORDER BY num")
+	rows, err := db.Query("SELECT * FROM sheets ORDER BY `rank`, num")
 
 	if err != nil {
 		return nil, err
