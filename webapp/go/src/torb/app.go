@@ -288,7 +288,7 @@ func _getEvent(ctx context.Context, event Event) (*Event, error) {
 		event.Sheets[sheet.Rank].Detail = append(event.Sheets[sheet.Rank].Detail, &sheet)
 	}
 
-	_ = cch.Add("event."+strconv.FormatInt(event.ID, 10), event, 300*time.Millisecond)
+	_ = cch.Add("event."+strconv.FormatInt(event.ID, 10), event, 200*time.Millisecond)
 	return &event, nil
 }
 
@@ -356,7 +356,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	cch = cache.New(500*time.Millisecond, 500*time.Millisecond)
+	cch = cache.New(200*time.Millisecond, 200*time.Millisecond)
 
 	e := echo.New()
 
