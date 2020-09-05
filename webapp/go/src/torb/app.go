@@ -450,14 +450,15 @@ func main() {
 				return err
 			}
 
-			event, err := getEvent(reservation.EventID, -1)
-			if err != nil {
+			var rawEvent Event
+			if err := db.QueryRow("SELECT * FROM events WHERE id = ?", reservation.EventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
 				return err
 			}
-			price := event.Sheets[sheet.Rank].Price
-			event.Sheets = nil
-			event.Total = 0
-			event.Remains = 0
+			price := rawEvent.Price + sheet.Price
+			rawEvent.Sheets = nil
+			rawEvent.Total = 0
+			rawEvent.Remains = 0
+
 
 			reservation.Event = event
 			reservation.SheetRank = sheet.Rank
