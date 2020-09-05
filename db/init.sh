@@ -16,5 +16,5 @@ if [ ! -f "$DB_DIR/isucon8q-initial-dataset.sql.gz" ]; then
 fi
 
 mysql -uisucon -h 118.27.15.185 -pisucon torb -e 'ALTER TABLE reservations DROP KEY event_id_and_sheet_id_idx'
-gzip -dc "$DB_DIR/isucon8q-initial-dataset.sql.gz" | mysql -uisucon -pisucon torb
+gzip -dc "$DB_DIR/isucon8q-initial-dataset.sql.gz" | mysql -uisucon -h 118.27.15.185 -pisucon torb
 mysql -uisucon -h 118.27.15.185 -pisucon torb -e 'ALTER TABLE reservations ADD KEY event_id_and_sheet_id_idx (event_id, sheet_id)'
