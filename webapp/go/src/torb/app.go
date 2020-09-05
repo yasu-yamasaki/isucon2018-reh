@@ -614,7 +614,11 @@ func main() {
 
 		var rawEvent Event
 		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			return err
+			if err == sql.ErrNoRows {
+				return resError(c, "invalid_event", 404)
+			} else if err != nil {
+				return err
+			}
 		}
 		event, err := getEvent(rawEvent, user.ID)
 		if err != nil {
