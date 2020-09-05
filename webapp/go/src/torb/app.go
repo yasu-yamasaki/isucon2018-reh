@@ -232,7 +232,7 @@ func getEvents(ctx context.Context, all bool) ([]*Event, error) {
 
 /*
 eventに、SheetsとTotalとRemainsを設定する
-*/
+ */
 func getEvent(ctx context.Context, event Event, loginUserID int64) (*Event, error) {
 
 	event.Sheets = map[string]*Sheets{
@@ -303,9 +303,9 @@ func fillinAdministrator(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-func validateRank(ctx context.Context, rank string) bool {
+func validateRank(rank string) bool {
 	var count int
-	db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sheets WHERE `rank` = ?", rank).Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM sheets WHERE `rank` = ?", rank).Scan(&count)
 	return count > 0
 }
 
@@ -633,7 +633,7 @@ func main() {
 			return resError(c, "invalid_event", 404)
 		}
 
-		if !validateRank(ctx, params.Rank) {
+		if !validateRank(params.Rank) {
 			return resError(c, "invalid_rank", 400)
 		}
 
@@ -706,7 +706,7 @@ func main() {
 			return resError(c, "invalid_event", 404)
 		}
 
-		if !validateRank(ctx, rank) {
+		if !validateRank(rank) {
 			return resError(c, "invalid_rank", 404)
 		}
 
