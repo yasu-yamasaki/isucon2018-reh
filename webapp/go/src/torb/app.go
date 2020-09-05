@@ -332,9 +332,9 @@ func main() {
 		newrelic.ConfigLicense("d3224d588a43c8ea493456a20f605978471bNRAL"),
 		newrelic.ConfigDistributedTracerEnabled(true),
 	)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	if err != nil {
+		log.Fatal(err)
+	}
 	e.Use(nrecho.Middleware(app))
 
 	funcs := template.FuncMap{
