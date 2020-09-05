@@ -251,6 +251,7 @@ func getEvent(ctx context.Context, event Event, loginUserID int64, cache bool) (
 
 		ress[reservation.SheetID] = reservation
 	}
+	println(ress)
 
 	for _, sheets := range ev.Sheets {
 		for _, s := range sheets.Detail {
