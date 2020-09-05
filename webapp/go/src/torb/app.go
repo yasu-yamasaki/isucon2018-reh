@@ -799,6 +799,7 @@ func main() {
 		return c.NoContent(204)
 	}, adminLoginRequired)
 	e.GET("/admin/api/events", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
 		events, err := getEvents(ctx, true)
 		if err != nil {
 			return err
