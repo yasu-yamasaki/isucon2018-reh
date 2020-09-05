@@ -230,6 +230,9 @@ func getEvents(ctx context.Context, all bool) ([]*Event, error) {
 	return events, nil
 }
 
+/*
+eventに、SheetsとTotalとRemainsを設定する
+ */
 func getEvent(ctx context.Context, event Event, loginUserID int64) (*Event, error) {
 
 	event.Sheets = map[string]*Sheets{
@@ -239,7 +242,8 @@ func getEvent(ctx context.Context, event Event, loginUserID int64) (*Event, erro
 		"C": &Sheets{},
 	}
 
-	rows, err := db.QueryContext(ctx, "SELECT * FROM sheets ORDER BY `rank`, num")
+	rows, err := db.QueryContext(ctx, "SELECT * FROM sheets ORDER BY num")
+
 	if err != nil {
 		return nil, err
 	}
