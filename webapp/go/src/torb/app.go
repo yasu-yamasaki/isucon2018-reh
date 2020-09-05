@@ -846,6 +846,9 @@ func main() {
 		}
 		var rawEvent Event
 		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+			if err == sql.ErrNoRows {
+				return resError(c, "not_found", 404)
+			}
 			return err
 		}
 		event, err := getEvent(ctx, rawEvent, -1)
