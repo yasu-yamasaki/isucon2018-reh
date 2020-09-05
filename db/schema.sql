@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS sheets (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX sheets_rank ON sheets(`rank`);
-CREATE INDEX sheets_rank ON sheets(num);
+CREATE INDEX sheets_num ON sheets(num);
 
 CREATE TABLE IF NOT EXISTS reservations (
     id          INTEGER UNSIGNED PRIMARY KEY AUTO_INCREMENT,
