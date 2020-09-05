@@ -6,8 +6,8 @@ BENCH_DIR="$ROOT_DIR/bench"
 
 export MYSQL_PWD=isucon
 
-mysql -uisucon -h 118.27.15.185 -pisucon -e "DROP DATABASE IF EXISTS torb; CREATE DATABASE torb;"
-mysql -uisucon -h 118.27.15.185 -pisucon torb < "$DB_DIR/schema.sql"
+mysql -uisucon -e "DROP DATABASE IF EXISTS torb; CREATE DATABASE torb;"
+mysql -uisucon torb < "$DB_DIR/schema.sql"
 
 if [ ! -f "$DB_DIR/isucon8q-initial-dataset.sql.gz" ]; then
   echo "Run the following command beforehand." 1>&2
@@ -15,6 +15,6 @@ if [ ! -f "$DB_DIR/isucon8q-initial-dataset.sql.gz" ]; then
   exit 1
 fi
 
-mysql -uisucon -h 118.27.15.185 -pisucon torb -e 'ALTER TABLE reservations DROP KEY event_id_and_sheet_id_idx'
-gzip -dc "$DB_DIR/isucon8q-initial-dataset.sql.gz" | mysql -uisucon -h 118.27.15.185 -pisucon torb
-mysql -uisucon -h 118.27.15.185 -pisucon torb -e 'ALTER TABLE reservations ADD KEY event_id_and_sheet_id_idx (event_id, sheet_id)'
+mysql -uisucon torb -e 'ALTER TABLE reservations DROP KEY event_id_and_sheet_id_idx'
+gzip -dc "$DB_DIR/isucon8q-initial-dataset.sql.gz" | mysql -uisucon torb
+mysql -uisucon torb -e 'ALTER TABLE reservations ADD KEY event_id_and_sheet_id_idx (event_id, sheet_id)'
