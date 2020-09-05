@@ -226,6 +226,9 @@ func getEvents(all bool) ([]*Event, error) {
 	return events, nil
 }
 
+/*
+eventに、SheetsとTotalとRemainsを設定する
+ */
 func getEvent(event Event, loginUserID int64) (*Event, error) {
 	event.Sheets = map[string]*Sheets{
 		"S": &Sheets{},
