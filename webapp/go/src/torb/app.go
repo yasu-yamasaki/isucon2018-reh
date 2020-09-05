@@ -19,12 +19,12 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/newrelic/go-agent/v3/integrations/nrecho-v4"
-	_ "github.com/newrelic/go-agent/v3/integrations/nrmysql"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
@@ -336,6 +336,20 @@ func main() {
 	}
 
 	e := echo.New()
+
+	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+		Skipper: func(c echo.Context) bool {
+			req := c.Request()
+			return req.URL.Path == "/healthcheck"
+		},
+		Format: `{` +
+			`"app":"ff-gateway",` +
+			`"level":"info",` +
+			`"data":{"remote_ip":"${remote_ip}","method":"${method}","uri":"${uri}","status":${status},"latency":${latency},"latency_human":"${latency_human}"},` +
+			`"type":"access",` +
+			`"time":"${time_rfc3339}"` +
+			"}\n",
+	}))
 
 	app, err := newrelic.NewApplication(
 		newrelic.ConfigAppName("isucon2019"),
