@@ -252,6 +252,10 @@ func getEvent(ctx context.Context, event Event, loginUserID int64, cache bool) (
 		ress[reservation.SheetID] = reservation
 	}
 	println(len(ress))
+	ev.Remains = 0
+	for _, sheets := range ev.Sheets {
+		sheets.Remains = 0
+	}
 
 	for _, sheets := range ev.Sheets {
 		for _, s := range sheets.Detail {
@@ -263,6 +267,9 @@ func getEvent(ctx context.Context, event Event, loginUserID int64, cache bool) (
 				s.Reserved = true
 				s.ReservedAtUnix = reservation.ReservedAt.Unix()
 			} else {
+				s.Reserved = false
+				s.ReservedAtUnix = 0
+				s.Mine = false
 				ev.Remains++
 				ev.Sheets[s.Rank].Remains++
 			}
