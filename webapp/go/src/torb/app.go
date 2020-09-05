@@ -260,7 +260,7 @@ func getEvent(ctx context.Context, event Event, loginUserID int64) (*Event, erro
 			event.Remains++
 			event.Sheets[sheet.Rank].Remains++
 		} else {
-			return nil, errF
+			return nil, err
 		}
 
 		event.Sheets[sheet.Rank].Detail = append(event.Sheets[sheet.Rank].Detail, &sheet)
