@@ -18,9 +18,11 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
-	"github.com/labstack/echo"
 	"github.com/labstack/echo-contrib/session"
-	"github.com/labstack/echo/middleware"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"github.com/newrelic/go-agent/v3/integrations/nrecho-v4"
+	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
 type User struct {
@@ -324,6 +326,17 @@ func main() {
 	}
 
 	e := echo.New()
+
+	app, err := newrelic.NewApplication(
+		newrelic.ConfigAppName("isucon2019"),
+		newrelic.ConfigLicense("d3224d588a43c8ea493456a20f605978471bNRAL"),
+		newrelic.ConfigDistributedTracerEnabled(true),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	e.Use(nrecho.Middleware(app))
+
 	funcs := template.FuncMap{
 		"encode_json": func(v interface{}) string {
 			b, _ := json.Marshal(v)
