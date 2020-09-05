@@ -501,7 +501,9 @@ func main() {
 			}
 			var rawEvent Event
 			if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-				return err
+				if err == sql.ErrNoRows {
+					return resError(c, "not_found", 404)
+				}
 			}
 			event, err := getEvent(rawEvent, -1)
 			if err != nil {
@@ -583,7 +585,9 @@ func main() {
 		}
 		var rawEvent Event
 		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			return err
+			if err == sql.ErrNoRows {
+				return resError(c, "not_found", 404)
+			}
 		}
 		event, err := getEvent(rawEvent, loginUserID)
 		if err != nil {
@@ -835,7 +839,9 @@ func main() {
 
 		var rawEvent Event
 		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			return err
+			if err == sql.ErrNoRows {
+				return resError(c, "not_found", 404)
+			}
 		}
 		event, err := getEvent(rawEvent, -1)
 		if err != nil {
@@ -851,7 +857,9 @@ func main() {
 		}
 		var rawEvent Event
 		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			return err
+			if err == sql.ErrNoRows {
+				return resError(c, "not_found", 404)
+			}
 		}
 		event, err := getEvent(rawEvent, -1)
 		if err != nil {
@@ -880,7 +888,9 @@ func main() {
 
 		var rawEvent Event
 		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			return err
+			if err == sql.ErrNoRows {
+				return resError(c, "not_found", 404)
+			}
 		}
 		event, err := getEvent(rawEvent, -1)
 		if err != nil {
@@ -924,7 +934,9 @@ func main() {
 
 		var rawEvent Event
 		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			return err
+			if err == sql.ErrNoRows {
+				return resError(c, "not_found", 404)
+			}
 		}
 		event, err := getEvent(rawEvent, -1)
 		if err != nil {
