@@ -1,3 +1,0 @@
-name="ISUCON8-Portal"
-[build]
-build_class = "builder::MyBuilder"
