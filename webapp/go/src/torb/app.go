@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -19,12 +20,12 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/newrelic/go-agent/v3/integrations/nrecho-v4"
+	_ "github.com/newrelic/go-agent/v3/integrations/nrmysql"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
@@ -174,8 +175,10 @@ func getLoginUser(c echo.Context) (*User, error) {
 	if userID == 0 {
 		return nil, errors.New("not logged in")
 	}
+
 	var user User
-	err := db.QueryRow("SELECT id, nickname FROM users WHERE id = ?", userID).Scan(&user.ID, &user.Nickname)
+	ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
+	err := db.QueryRowContext(ctx, "SELECT id, nickname FROM users WHERE id = ?", userID).Scan(&user.ID, &user.Nickname)
 	return &user, err
 }
 
@@ -185,18 +188,19 @@ func getLoginAdministrator(c echo.Context) (*Administrator, error) {
 		return nil, errors.New("not logged in")
 	}
 	var administrator Administrator
-	err := db.QueryRow("SELECT id, nickname FROM administrators WHERE id = ?", administratorID).Scan(&administrator.ID, &administrator.Nickname)
+	ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
+	err := db.QueryRowContext(ctx, "SELECT id, nickname FROM administrators WHERE id = ?", administratorID).Scan(&administrator.ID, &administrator.Nickname)
 	return &administrator, err
 }
 
-func getEvents(all bool) ([]*Event, error) {
+func getEvents(ctx context.Context, all bool) ([]*Event, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Commit()
 
-	rows, err := tx.Query("SELECT * FROM events ORDER BY id ASC")
+	rows, err := tx.QueryContext(ctx, "SELECT * FROM events ORDER BY id ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +218,7 @@ func getEvents(all bool) ([]*Event, error) {
 		events = append(events, &event)
 	}
 	for i, v := range events {
-		event, err := getEvent(*v, -1)
+		event, err := getEvent(ctx, *v, -1)
 		if err != nil {
 			return nil, err
 		}
@@ -226,7 +230,8 @@ func getEvents(all bool) ([]*Event, error) {
 	return events, nil
 }
 
-func getEvent(event Event, loginUserID int64) (*Event, error) {
+func getEvent(ctx context.Context, event Event, loginUserID int64) (*Event, error) {
+
 	event.Sheets = map[string]*Sheets{
 		"S": &Sheets{},
 		"A": &Sheets{},
@@ -234,7 +239,7 @@ func getEvent(event Event, loginUserID int64) (*Event, error) {
 		"C": &Sheets{},
 	}
 
-	rows, err := db.Query("SELECT * FROM sheets ORDER BY `rank`, num")
+	rows, err := db.QueryContext(ctx, "SELECT * FROM sheets ORDER BY `rank`, num")
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +255,7 @@ func getEvent(event Event, loginUserID int64) (*Event, error) {
 		event.Sheets[sheet.Rank].Total++
 
 		var reservation Reservation
-		err := db.QueryRow("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
+		err := db.QueryRowContext(ctx, "SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
 		if err == nil {
 			sheet.Mine = reservation.UserID == loginUserID
 			sheet.Reserved = true
@@ -311,7 +316,6 @@ func (r *Renderer) Render(w io.Writer, name string, data interface{}, c echo.Con
 var db *sql.DB
 
 func main() {
-
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
@@ -323,7 +327,7 @@ func main() {
 	)
 
 	var err error
-	db, err = sql.Open("mysql", dsn)
+	db, err := sql.Open("nrmysql", dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -353,7 +357,8 @@ func main() {
 	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{Output: os.Stderr}))
 	e.Static("/", "public")
 	e.GET("/", func(c echo.Context) error {
-		events, err := getEvents(false)
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
+		events, err := getEvents(ctx, false)
 		if err != nil {
 			return err
 		}
@@ -378,6 +383,7 @@ func main() {
 		return c.NoContent(204)
 	})
 	e.POST("/api/users", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
 		var params struct {
 			Nickname  string `json:"nickname"`
 			LoginName string `json:"login_name"`
@@ -391,7 +397,7 @@ func main() {
 		}
 
 		var user User
-		if err := tx.QueryRow("SELECT * FROM users WHERE login_name = ?", params.LoginName).Scan(&user.ID, &user.LoginName, &user.Nickname, &user.PassHash); err != sql.ErrNoRows {
+		if err := tx.QueryRowContext(ctx, "SELECT * FROM users WHERE login_name = ?", params.LoginName).Scan(&user.ID, &user.LoginName, &user.Nickname, &user.PassHash); err != sql.ErrNoRows {
 			tx.Rollback()
 			if err == nil {
 				return resError(c, "duplicated", 409)
@@ -399,7 +405,7 @@ func main() {
 			return err
 		}
 
-		res, err := tx.Exec("INSERT INTO users (login_name, pass_hash, nickname) VALUES (?, SHA2(?, 256), ?)", params.LoginName, params.Password, params.Nickname)
+		res, err := tx.ExecContext(ctx, "INSERT INTO users (login_name, pass_hash, nickname) VALUES (?, SHA2(?, 256), ?)", params.LoginName, params.Password, params.Nickname)
 		if err != nil {
 			tx.Rollback()
 			return resError(c, "", 0)
@@ -419,8 +425,10 @@ func main() {
 		})
 	})
 	e.GET("/api/users/:id", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
+
 		var user User
-		if err := db.QueryRow("SELECT id, nickname FROM users WHERE id = ?", c.Param("id")).Scan(&user.ID, &user.Nickname); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT id, nickname FROM users WHERE id = ?", c.Param("id")).Scan(&user.ID, &user.Nickname); err != nil {
 			return err
 		}
 
@@ -432,7 +440,7 @@ func main() {
 			return resError(c, "forbidden", 403)
 		}
 
-		rows, err := db.Query("SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id WHERE r.user_id = ? ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5", user.ID)
+		rows, err := db.QueryContext(ctx, "SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id WHERE r.user_id = ? ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5", user.ID)
 		if err != nil {
 			return err
 		}
@@ -447,10 +455,10 @@ func main() {
 			}
 
 			var rawEvent Event
-			if err := db.QueryRow("SELECT * FROM events WHERE id = ?", reservation.EventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+			if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", reservation.EventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
 				return err
 			}
-			event, err := getEvent(rawEvent, -1)
+			event, err := getEvent(ctx, rawEvent, -1)
 			if err != nil {
 				return err
 			}
@@ -474,11 +482,11 @@ func main() {
 		}
 
 		var totalPrice int
-		if err := db.QueryRow("SELECT IFNULL(SUM(e.price + s.price), 0) FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.canceled_at IS NULL", user.ID).Scan(&totalPrice); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT IFNULL(SUM(e.price + s.price), 0) FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.canceled_at IS NULL", user.ID).Scan(&totalPrice); err != nil {
 			return err
 		}
 
-		rows, err = db.Query("SELECT event_id FROM reservations WHERE user_id = ? GROUP BY event_id ORDER BY MAX(IFNULL(canceled_at, reserved_at)) DESC LIMIT 5", user.ID)
+		rows, err = db.QueryContext(ctx, "SELECT event_id FROM reservations WHERE user_id = ? GROUP BY event_id ORDER BY MAX(IFNULL(canceled_at, reserved_at)) DESC LIMIT 5", user.ID)
 		if err != nil {
 			return err
 		}
@@ -491,10 +499,10 @@ func main() {
 				return err
 			}
 			var rawEvent Event
-			if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+			if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
 				return err
 			}
-			event, err := getEvent(rawEvent, -1)
+			event, err := getEvent(ctx, rawEvent, -1)
 			if err != nil {
 				return err
 			}
@@ -516,6 +524,8 @@ func main() {
 		})
 	}, loginRequired)
 	e.POST("/api/actions/login", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
+
 		var params struct {
 			LoginName string `json:"login_name"`
 			Password  string `json:"password"`
@@ -523,7 +533,7 @@ func main() {
 		c.Bind(&params)
 
 		user := new(User)
-		if err := db.QueryRow("SELECT * FROM users WHERE login_name = ?", params.LoginName).Scan(&user.ID, &user.LoginName, &user.Nickname, &user.PassHash); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT * FROM users WHERE login_name = ?", params.LoginName).Scan(&user.ID, &user.LoginName, &user.Nickname, &user.PassHash); err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "authentication_failed", 401)
 			}
@@ -531,7 +541,7 @@ func main() {
 		}
 
 		var passHash string
-		if err := db.QueryRow("SELECT SHA2(?, 256)", params.Password).Scan(&passHash); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT SHA2(?, 256)", params.Password).Scan(&passHash); err != nil {
 			return err
 		}
 		if user.PassHash != passHash {
@@ -550,7 +560,9 @@ func main() {
 		return c.NoContent(204)
 	}, loginRequired)
 	e.GET("/api/events", func(c echo.Context) error {
-		events, err := getEvents(true)
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
+
+		events, err := getEvents(ctx, true)
 		if err != nil {
 			return err
 		}
@@ -560,6 +572,8 @@ func main() {
 		return c.JSON(200, events)
 	})
 	e.GET("/api/events/:id", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
+
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
@@ -570,10 +584,10 @@ func main() {
 			loginUserID = user.ID
 		}
 		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
 			return err
 		}
-		event, err := getEvent(rawEvent, loginUserID)
+		event, err := getEvent(ctx, rawEvent, loginUserID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -585,6 +599,8 @@ func main() {
 		return c.JSON(200, sanitizeEvent(event))
 	})
 	e.POST("/api/events/:id/actions/reserve", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
+
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
@@ -600,10 +616,10 @@ func main() {
 		}
 
 		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
 			return err
 		}
-		event, err := getEvent(rawEvent, user.ID)
+		event, err := getEvent(ctx, rawEvent, user.ID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "invalid_event", 404)
@@ -620,7 +636,7 @@ func main() {
 		var sheet Sheet
 		var reservationID int64
 		for {
-			if err := db.QueryRow("SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1", event.ID, params.Rank).Scan(&sheet.ID, &sheet.Rank, &sheet.Num, &sheet.Price); err != nil {
+			if err := db.QueryRowContext(ctx, "SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1", event.ID, params.Rank).Scan(&sheet.ID, &sheet.Rank, &sheet.Num, &sheet.Price); err != nil {
 				if err == sql.ErrNoRows {
 					return resError(c, "sold_out", 409)
 				}
@@ -632,7 +648,7 @@ func main() {
 				return err
 			}
 
-			res, err := tx.Exec("INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?)", event.ID, sheet.ID, user.ID, time.Now().UTC().Format("2006-01-02 15:04:05.000000"))
+			res, err := tx.ExecContext(ctx, "INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?)", event.ID, sheet.ID, user.ID, time.Now().UTC().Format("2006-01-02 15:04:05.000000"))
 			if err != nil {
 				tx.Rollback()
 				log.Println("re-try: rollback by", err)
@@ -659,6 +675,7 @@ func main() {
 		})
 	}, loginRequired)
 	e.DELETE("/api/events/:id/sheets/:rank/:num/reservation", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
@@ -672,10 +689,10 @@ func main() {
 		}
 
 		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
 			return err
 		}
-		event, err := getEvent(rawEvent, user.ID)
+		event, err := getEvent(ctx, rawEvent, user.ID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "invalid_event", 404)
@@ -690,7 +707,7 @@ func main() {
 		}
 
 		var sheet Sheet
-		if err := db.QueryRow("SELECT * FROM sheets WHERE `rank` = ? AND num = ?", rank, num).Scan(&sheet.ID, &sheet.Rank, &sheet.Num, &sheet.Price); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT * FROM sheets WHERE `rank` = ? AND num = ?", rank, num).Scan(&sheet.ID, &sheet.Rank, &sheet.Num, &sheet.Price); err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "invalid_sheet", 404)
 			}
@@ -703,7 +720,7 @@ func main() {
 		}
 
 		var reservation Reservation
-		if err := tx.QueryRow("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id HAVING reserved_at = MIN(reserved_at) FOR UPDATE", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt); err != nil {
+		if err := tx.QueryRowContext(ctx, "SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id HAVING reserved_at = MIN(reserved_at) FOR UPDATE", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt); err != nil {
 			tx.Rollback()
 			if err == sql.ErrNoRows {
 				return resError(c, "not_reserved", 400)
@@ -715,7 +732,7 @@ func main() {
 			return resError(c, "not_permitted", 403)
 		}
 
-		if _, err := tx.Exec("UPDATE reservations SET canceled_at = ? WHERE id = ?", time.Now().UTC().Format("2006-01-02 15:04:05.000000"), reservation.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, "UPDATE reservations SET canceled_at = ? WHERE id = ?", time.Now().UTC().Format("2006-01-02 15:04:05.000000"), reservation.ID); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -727,11 +744,12 @@ func main() {
 		return c.NoContent(204)
 	}, loginRequired)
 	e.GET("/admin/", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
 		var events []*Event
 		administrator := c.Get("administrator")
 		if administrator != nil {
 			var err error
-			if events, err = getEvents(true); err != nil {
+			if events, err = getEvents(ctx, true); err != nil {
 				return err
 			}
 		}
@@ -742,6 +760,7 @@ func main() {
 		})
 	}, fillinAdministrator)
 	e.POST("/admin/api/actions/login", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
 		var params struct {
 			LoginName string `json:"login_name"`
 			Password  string `json:"password"`
@@ -749,7 +768,7 @@ func main() {
 		c.Bind(&params)
 
 		administrator := new(Administrator)
-		if err := db.QueryRow("SELECT * FROM administrators WHERE login_name = ?", params.LoginName).Scan(&administrator.ID, &administrator.LoginName, &administrator.Nickname, &administrator.PassHash); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT * FROM administrators WHERE login_name = ?", params.LoginName).Scan(&administrator.ID, &administrator.LoginName, &administrator.Nickname, &administrator.PassHash); err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "authentication_failed", 401)
 			}
@@ -757,7 +776,7 @@ func main() {
 		}
 
 		var passHash string
-		if err := db.QueryRow("SELECT SHA2(?, 256)", params.Password).Scan(&passHash); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT SHA2(?, 256)", params.Password).Scan(&passHash); err != nil {
 			return err
 		}
 		if administrator.PassHash != passHash {
@@ -776,13 +795,14 @@ func main() {
 		return c.NoContent(204)
 	}, adminLoginRequired)
 	e.GET("/admin/api/events", func(c echo.Context) error {
-		events, err := getEvents(true)
+		events, err := getEvents(ctx, true)
 		if err != nil {
 			return err
 		}
 		return c.JSON(200, events)
 	}, adminLoginRequired)
 	e.POST("/admin/api/events", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
 		var params struct {
 			Title  string `json:"title"`
 			Public bool   `json:"public"`
@@ -795,7 +815,7 @@ func main() {
 			return err
 		}
 
-		res, err := tx.Exec("INSERT INTO events (title, public_fg, closed_fg, price) VALUES (?, ?, 0, ?)", params.Title, params.Public, params.Price)
+		res, err := tx.ExecContext(ctx, "INSERT INTO events (title, public_fg, closed_fg, price) VALUES (?, ?, 0, ?)", params.Title, params.Public, params.Price)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -810,25 +830,26 @@ func main() {
 		}
 
 		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
 			return err
 		}
-		event, err := getEvent(rawEvent, -1)
+		event, err := getEvent(ctx, rawEvent, -1)
 		if err != nil {
 			return err
 		}
 		return c.JSON(200, event)
 	}, adminLoginRequired)
 	e.GET("/admin/api/events/:id", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
 		}
 		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
 			return err
 		}
-		event, err := getEvent(rawEvent, -1)
+		event, err := getEvent(ctx, rawEvent, -1)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -838,6 +859,7 @@ func main() {
 		return c.JSON(200, event)
 	}, adminLoginRequired)
 	e.POST("/admin/api/events/:id/actions/edit", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
@@ -853,10 +875,10 @@ func main() {
 		}
 
 		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
 			return err
 		}
-		event, err := getEvent(rawEvent, -1)
+		event, err := getEvent(ctx, rawEvent, -1)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -874,7 +896,7 @@ func main() {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec("UPDATE events SET public_fg = ?, closed_fg = ? WHERE id = ?", params.Public, params.Closed, event.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, "UPDATE events SET public_fg = ?, closed_fg = ? WHERE id = ?", params.Public, params.Closed, event.ID); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -882,7 +904,7 @@ func main() {
 			return err
 		}
 
-		e, err := getEvent(rawEvent, -1)
+		e, err := getEvent(ctx, rawEvent, -1)
 		if err != nil {
 			return err
 		}
@@ -890,21 +912,22 @@ func main() {
 		return nil
 	}, adminLoginRequired)
 	e.GET("/admin/api/reports/events/:id/sales", func(c echo.Context) error {
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
 		}
 
 		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
 			return err
 		}
-		event, err := getEvent(rawEvent, -1)
+		event, err := getEvent(ctx, rawEvent, -1)
 		if err != nil {
 			return err
 		}
 
-		rows, err := db.Query("SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.price AS event_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.event_id = ? ORDER BY reserved_at ASC FOR UPDATE", event.ID)
+		rows, err := db.QueryContext(ctx, "SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.price AS event_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.event_id = ? ORDER BY reserved_at ASC FOR UPDATE", event.ID)
 		if err != nil {
 			return err
 		}
@@ -934,7 +957,8 @@ func main() {
 		return renderReportCSV(c, reports)
 	}, adminLoginRequired)
 	e.GET("/admin/api/reports/sales", func(c echo.Context) error {
-		rows, err := db.Query("select r.*, s.rank as sheet_rank, s.num as sheet_num, s.price as sheet_price, e.id as event_id, e.price as event_price from reservations r inner join sheets s on s.id = r.sheet_id inner join events e on e.id = r.event_id order by reserved_at asc for update")
+		ctx := newrelic.NewContext(c.Request().Context(), nrecho.FromContext(c))
+		rows, err := db.QueryContext(ctx, "select r.*, s.rank as sheet_rank, s.num as sheet_num, s.price as sheet_price, e.id as event_id, e.price as event_price from reservations r inner join sheets s on s.id = r.sheet_id inner join events e on e.id = r.event_id order by reserved_at asc for update")
 		if err != nil {
 			return err
 		}
