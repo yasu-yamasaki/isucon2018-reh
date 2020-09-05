@@ -254,12 +254,17 @@ func getEvent(ctx context.Context, event Event, loginUserID int64, cache bool) (
 	return ev, err
 }
 
+func (a *Event) clone() *Event {
+	copy := *a
+	return &copy
+}
+
 func _getEvent(ctx context.Context, event Event, cache bool) (*Event, error) {
 	if cache {
 		cv, found := cch.Get("event." + strconv.FormatInt(event.ID, 10))
 		if found {
 			ev := cv.(Event)
-			return &ev, nil
+			return ev.clone(), nil
 		}
 	}
 
@@ -287,7 +292,7 @@ func _getEvent(ctx context.Context, event Event, cache bool) (*Event, error) {
 		event.Sheets[sheet.Rank].Detail = append(event.Sheets[sheet.Rank].Detail, &sheet)
 	}
 
-	_ = cch.Add("event."+strconv.FormatInt(event.ID, 10), event, 200*time.Millisecond)
+	_ = cch.Add("event."+strconv.FormatInt(event.ID, 10), event, 400*time.Millisecond)
 	return &event, nil
 }
 
@@ -355,7 +360,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	cch = cache.New(200*time.Millisecond, 200*time.Millisecond)
+	cch = cache.New(400*time.Millisecond, 400*time.Millisecond)
 
 	e := echo.New()
 
