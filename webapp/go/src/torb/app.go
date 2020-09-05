@@ -236,7 +236,19 @@ func getEvent(ctx context.Context, event Event, loginUserID int64, cache bool) (
 	}
 	for _, sheets := range ev.Sheets {
 		for _, s := range sheets.Detail {
-			s.Mine = s.ReservedUserId == loginUserID
+			var reservation Reservation
+			err := db.QueryRow("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", event.ID, s.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
+			if err == nil {
+				s.ReservedUserId = reservation.UserID
+				s.Mine = s.ReservedUserId == loginUserID
+				s.Reserved = true
+				s.ReservedAtUnix = reservation.ReservedAt.Unix()
+			} else if err == sql.ErrNoRows {
+				event.Remains++
+				event.Sheets[s.Rank].Remains++
+			} else {
+				return nil, err
+			}
 		}
 	}
 	return ev, err
@@ -272,21 +284,6 @@ func _getEvent(ctx context.Context, event Event, cache bool) (*Event, error) {
 		event.Sheets[sheet.Rank].Price = event.Price + sheet.Price
 		event.Total++
 		event.Sheets[sheet.Rank].Total++
-
-		var reservation Reservation
-		err := db.QueryRow("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
-		if err == nil {
-			sheet.ReservedUserId = reservation.UserID
-			sheet.Mine = false
-			sheet.Reserved = true
-			sheet.ReservedAtUnix = reservation.ReservedAt.Unix()
-		} else if err == sql.ErrNoRows {
-			event.Remains++
-			event.Sheets[sheet.Rank].Remains++
-		} else {
-			return nil, err
-		}
-
 		event.Sheets[sheet.Rank].Detail = append(event.Sheets[sheet.Rank].Detail, &sheet)
 	}
 
