@@ -11,6 +11,7 @@ require (
 	github.com/newrelic/go-agent/v3 v3.3.0
 	github.com/newrelic/go-agent/v3/integrations/nrecho-v4 v1.0.0
 	github.com/newrelic/go-agent/v3/integrations/nrmysql v1.2.0
+	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/stretchr/testify v1.6.1 // indirect
 	golang.org/x/sys v0.0.0-20200905004654-be1d3432aa8f // indirect
 )

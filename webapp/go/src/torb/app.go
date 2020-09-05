@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/patrickmn/go-cache"
 	"html/template"
 	"io"
 	"log"
@@ -64,6 +65,7 @@ type Sheet struct {
 	Mine           bool       `json:"mine,omitempty"`
 	Reserved       bool       `json:"reserved,omitempty"`
 	ReservedAt     *time.Time `json:"-"`
+	ReservedUserId int64      `json:"-"`
 	ReservedAtUnix int64      `json:"reserved_at,omitempty"`
 }
 
@@ -228,6 +230,25 @@ func getEvents(ctx context.Context, all bool) ([]*Event, error) {
 }
 
 func getEvent(ctx context.Context, event Event, loginUserID int64) (*Event, error) {
+	ev, err := _getEvent(ctx, event)
+	if err != nil {
+		return nil, err
+	}
+	for _, sheets := range ev.Sheets {
+		for _, s := range sheets.Detail {
+			s.Mine = s.ReservedUserId == loginUserID
+		}
+	}
+	return ev, err
+}
+
+func _getEvent(ctx context.Context, event Event) (*Event, error) {
+	cv, found := cch.Get("event." + strconv.FormatInt(event.ID, 10))
+	if found {
+		ev := cv.(Event)
+		return &ev, nil
+	}
+
 	event.Sheets = map[string]*Sheets{
 		"S": &Sheets{},
 		"A": &Sheets{},
@@ -253,7 +274,8 @@ func getEvent(ctx context.Context, event Event, loginUserID int64) (*Event, erro
 		var reservation Reservation
 		err := db.QueryRow("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
 		if err == nil {
-			sheet.Mine = reservation.UserID == loginUserID
+			sheet.ReservedUserId = reservation.UserID
+			sheet.Mine = false
 			sheet.Reserved = true
 			sheet.ReservedAtUnix = reservation.ReservedAt.Unix()
 		} else if err == sql.ErrNoRows {
@@ -266,6 +288,7 @@ func getEvent(ctx context.Context, event Event, loginUserID int64) (*Event, erro
 		event.Sheets[sheet.Rank].Detail = append(event.Sheets[sheet.Rank].Detail, &sheet)
 	}
 
+	_ = cch.Add("event."+strconv.FormatInt(event.ID, 10), event, 300*time.Millisecond)
 	return &event, nil
 }
 
@@ -332,6 +355,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	cch := cache.New(500*time.Millisecond, 500*time.Millisecond)
 
 	e := echo.New()
 
@@ -1034,3 +1059,5 @@ func resError(c echo.Context, e string, status int) error {
 	}
 	return c.JSON(status, map[string]string{"error": e})
 }
+
+var cch cache.Cache
