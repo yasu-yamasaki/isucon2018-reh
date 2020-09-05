@@ -251,6 +251,7 @@ func getEvent(ctx context.Context, event Event, loginUserID int64, cache bool) (
 
 		ress[reservation.SheetID] = reservation
 	}
+	println(len(ress))
 	for _, sheets := range ev.Sheets {
 		for _, s := range sheets.Detail {
 			reservation, ok := ress[s.ID]
@@ -267,10 +268,6 @@ func getEvent(ctx context.Context, event Event, loginUserID int64, cache bool) (
 				ev.Sheets[s.Rank].Remains++
 			}
 		}
-	}
-	println(ev.Remains)
-	for _, sheets := range ev.Sheets {
-		println(sheets.Remains)
 	}
 	return ev, err
 }
