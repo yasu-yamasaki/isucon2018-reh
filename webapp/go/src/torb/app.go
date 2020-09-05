@@ -337,20 +337,6 @@ func main() {
 
 	e := echo.New()
 
-	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
-		Skipper: func(c echo.Context) bool {
-			req := c.Request()
-			return req.URL.Path == "/healthcheck"
-		},
-		Format: `{` +
-			`"app":"ff-gateway",` +
-			`"level":"info",` +
-			`"data":{"remote_ip":"${remote_ip}","method":"${method}","uri":"${uri}","status":${status},"latency":${latency},"latency_human":"${latency_human}"},` +
-			`"type":"access",` +
-			`"time":"${time_rfc3339}"` +
-			"}\n",
-	}))
-
 	app, err := newrelic.NewApplication(
 		newrelic.ConfigAppName("isucon2019"),
 		newrelic.ConfigLicense("d3224d588a43c8ea493456a20f605978471bNRAL"),
