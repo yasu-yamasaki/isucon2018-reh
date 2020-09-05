@@ -231,7 +231,7 @@ func getEvents(ctx context.Context, all bool) ([]*Event, error) {
 }
 
 func getEvent(ctx context.Context, event Event, loginUserID int64, cache bool) (*Event, error) {
-	ev, err := _getEvent(ctx, event, true)
+	ev, err := _getEvent(ctx, event, false)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +265,7 @@ func getEvent(ctx context.Context, event Event, loginUserID int64, cache bool) (
 				s.ReservedAtUnix = 0
 				s.Mine = false
 				ev.Remains++
-				ev.Sheets[s.Rank].Remains++
+				sheets.Remains++
 			}
 		}
 	}
