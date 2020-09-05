@@ -231,7 +231,7 @@ func getEvents(ctx context.Context, all bool) ([]*Event, error) {
 }
 
 func getEvent(ctx context.Context, event Event, loginUserID int64, cache bool) (*Event, error) {
-	ev, err := _getEvent(ctx, event, cache)
+	ev, err := _getEvent(ctx, event, true)
 	if err != nil {
 		return nil, err
 	}
@@ -270,10 +270,9 @@ func _getEvent(ctx context.Context, event Event, cache bool) (*Event, error) {
 			return ev.clone(), nil
 		}
 	}
+	m.Lock()
+	defer m.Unlock()
 	if cache {
-		m.Lock()
-		defer m.Unlock()
-		
 		cv, found := cch.Get("event." + strconv.FormatInt(event.ID, 10))
 		if found {
 			ev := cv.(Event)
