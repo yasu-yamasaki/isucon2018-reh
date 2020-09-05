@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 pushd webapp/go
 go mod download
 make build
