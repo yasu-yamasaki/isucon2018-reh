@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
     pass_hash   VARCHAR(128) NOT NULL,
     UNIQUE KEY login_name_uniq (login_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+create index user_name on users(login_name);
 
 CREATE TABLE IF NOT EXISTS events (
     id          INTEGER UNSIGNED PRIMARY KEY AUTO_INCREMENT,
@@ -34,7 +35,8 @@ CREATE TABLE IF NOT EXISTS reservations (
     canceled_at DATETIME(6)      DEFAULT NULL,
     KEY event_id_and_sheet_id_idx (event_id, sheet_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
+CREATE INDEX reservations_event_id ON reservations(event_id);
+CREATE INDEX reservations_sheet_id ON reservations(sheet_id);
 CREATE INDEX reservations_user_id ON reservations(user_id);
 
 CREATE TABLE IF NOT EXISTS administrators (
@@ -44,3 +46,4 @@ CREATE TABLE IF NOT EXISTS administrators (
     pass_hash   VARCHAR(128) NOT NULL,
     UNIQUE KEY login_name_uniq (login_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+create index administrators_name on administrators(login_name);
