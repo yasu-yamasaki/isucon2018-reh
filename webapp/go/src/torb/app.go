@@ -174,9 +174,7 @@ func getLoginUser(c echo.Context) (*User, error) {
 	if userID == 0 {
 		return nil, errors.New("not logged in")
 	}
-
 	var user User
-
 	err := db.QueryRow("SELECT id, nickname FROM users WHERE id = ?", userID).Scan(&user.ID, &user.Nickname)
 	return &user, err
 }
@@ -187,7 +185,6 @@ func getLoginAdministrator(c echo.Context) (*Administrator, error) {
 		return nil, errors.New("not logged in")
 	}
 	var administrator Administrator
-
 	err := db.QueryRow("SELECT id, nickname FROM administrators WHERE id = ?", administratorID).Scan(&administrator.ID, &administrator.Nickname)
 	return &administrator, err
 }
@@ -217,7 +214,7 @@ func getEvents(all bool) ([]*Event, error) {
 		events = append(events, &event)
 	}
 	for i, v := range events {
-		event, err := getEvent(*v, -1)
+		event, err := getEvent(v.ID, -1)
 		if err != nil {
 			return nil, err
 		}
@@ -229,11 +226,11 @@ func getEvents(all bool) ([]*Event, error) {
 	return events, nil
 }
 
-/*
-eventに、SheetsとTotalとRemainsを設定する
-*/
-func getEvent(event Event, loginUserID int64) (*Event, error) {
-
+func getEvent(eventID, loginUserID int64) (*Event, error) {
+	var event Event
+	if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&event.ID, &event.Title, &event.PublicFg, &event.ClosedFg, &event.Price); err != nil {
+		return nil, err
+	}
 	event.Sheets = map[string]*Sheets{
 		"S": &Sheets{},
 		"A": &Sheets{},
@@ -242,7 +239,6 @@ func getEvent(event Event, loginUserID int64) (*Event, error) {
 	}
 
 	rows, err := db.Query("SELECT * FROM sheets ORDER BY `rank`, num")
-
 	if err != nil {
 		return nil, err
 	}
@@ -319,6 +315,7 @@ func (r *Renderer) Render(w io.Writer, name string, data interface{}, c echo.Con
 var db *sql.DB
 
 func main() {
+
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
@@ -385,7 +382,6 @@ func main() {
 		return c.NoContent(204)
 	})
 	e.POST("/api/users", func(c echo.Context) error {
-
 		var params struct {
 			Nickname  string `json:"nickname"`
 			LoginName string `json:"login_name"`
@@ -427,7 +423,6 @@ func main() {
 		})
 	})
 	e.GET("/api/users/:id", func(c echo.Context) error {
-
 		var user User
 		if err := db.QueryRow("SELECT id, nickname FROM users WHERE id = ?", c.Param("id")).Scan(&user.ID, &user.Nickname); err != nil {
 			return err
@@ -455,11 +450,7 @@ func main() {
 				return err
 			}
 
-			var rawEvent Event
-			if err := db.QueryRow("SELECT * FROM events WHERE id = ?", reservation.EventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-				return err
-			}
-			event, err := getEvent(rawEvent, -1)
+			event, err := getEvent(reservation.EventID, -1)
 			if err != nil {
 				return err
 			}
@@ -499,13 +490,7 @@ func main() {
 			if err := rows.Scan(&eventID); err != nil {
 				return err
 			}
-			var rawEvent Event
-			if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-				if err == sql.ErrNoRows {
-					return resError(c, "not_found", 404)
-				}
-			}
-			event, err := getEvent(rawEvent, -1)
+			event, err := getEvent(eventID, -1)
 			if err != nil {
 				return err
 			}
@@ -527,7 +512,6 @@ func main() {
 		})
 	}, loginRequired)
 	e.POST("/api/actions/login", func(c echo.Context) error {
-
 		var params struct {
 			LoginName string `json:"login_name"`
 			Password  string `json:"password"`
@@ -562,7 +546,6 @@ func main() {
 		return c.NoContent(204)
 	}, loginRequired)
 	e.GET("/api/events", func(c echo.Context) error {
-
 		events, err := getEvents(true)
 		if err != nil {
 			return err
@@ -573,7 +556,6 @@ func main() {
 		return c.JSON(200, events)
 	})
 	e.GET("/api/events/:id", func(c echo.Context) error {
-
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
@@ -583,13 +565,8 @@ func main() {
 		if user, err := getLoginUser(c); err == nil {
 			loginUserID = user.ID
 		}
-		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			if err == sql.ErrNoRows {
-				return resError(c, "not_found", 404)
-			}
-		}
-		event, err := getEvent(rawEvent, loginUserID)
+
+		event, err := getEvent(eventID, loginUserID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -601,7 +578,6 @@ func main() {
 		return c.JSON(200, sanitizeEvent(event))
 	})
 	e.POST("/api/events/:id/actions/reserve", func(c echo.Context) error {
-
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
@@ -616,15 +592,7 @@ func main() {
 			return err
 		}
 
-		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			if err == sql.ErrNoRows {
-				return resError(c, "invalid_event", 404)
-			} else if err != nil {
-				return err
-			}
-		}
-		event, err := getEvent(rawEvent, user.ID)
+		event, err := getEvent(eventID, user.ID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "invalid_event", 404)
@@ -680,7 +648,6 @@ func main() {
 		})
 	}, loginRequired)
 	e.DELETE("/api/events/:id/sheets/:rank/:num/reservation", func(c echo.Context) error {
-
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
@@ -693,14 +660,7 @@ func main() {
 			return err
 		}
 
-		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			if err == sql.ErrNoRows {
-				return resError(c, "invalid_event", 404)
-			}
-			return err
-		}
-		event, err := getEvent(rawEvent, user.ID)
+		event, err := getEvent(eventID, user.ID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "invalid_event", 404)
@@ -752,7 +712,6 @@ func main() {
 		return c.NoContent(204)
 	}, loginRequired)
 	e.GET("/admin/", func(c echo.Context) error {
-
 		var events []*Event
 		administrator := c.Get("administrator")
 		if administrator != nil {
@@ -768,7 +727,6 @@ func main() {
 		})
 	}, fillinAdministrator)
 	e.POST("/admin/api/actions/login", func(c echo.Context) error {
-
 		var params struct {
 			LoginName string `json:"login_name"`
 			Password  string `json:"password"`
@@ -810,7 +768,6 @@ func main() {
 		return c.JSON(200, events)
 	}, adminLoginRequired)
 	e.POST("/admin/api/events", func(c echo.Context) error {
-
 		var params struct {
 			Title  string `json:"title"`
 			Public bool   `json:"public"`
@@ -837,31 +794,18 @@ func main() {
 			return err
 		}
 
-		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			if err == sql.ErrNoRows {
-				return resError(c, "not_found", 404)
-			}
-		}
-		event, err := getEvent(rawEvent, -1)
+		event, err := getEvent(eventID, -1)
 		if err != nil {
 			return err
 		}
 		return c.JSON(200, event)
 	}, adminLoginRequired)
 	e.GET("/admin/api/events/:id", func(c echo.Context) error {
-
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
 		}
-		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			if err == sql.ErrNoRows {
-				return resError(c, "not_found", 404)
-			}
-		}
-		event, err := getEvent(rawEvent, -1)
+		event, err := getEvent(eventID, -1)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -871,7 +815,6 @@ func main() {
 		return c.JSON(200, event)
 	}, adminLoginRequired)
 	e.POST("/admin/api/events/:id/actions/edit", func(c echo.Context) error {
-
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
@@ -886,13 +829,7 @@ func main() {
 			params.Public = false
 		}
 
-		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			if err == sql.ErrNoRows {
-				return resError(c, "not_found", 404)
-			}
-		}
-		event, err := getEvent(rawEvent, -1)
+		event, err := getEvent(eventID, -1)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -918,7 +855,7 @@ func main() {
 			return err
 		}
 
-		e, err := getEvent(rawEvent, -1)
+		e, err := getEvent(eventID, -1)
 		if err != nil {
 			return err
 		}
@@ -926,19 +863,12 @@ func main() {
 		return nil
 	}, adminLoginRequired)
 	e.GET("/admin/api/reports/events/:id/sales", func(c echo.Context) error {
-
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
 		}
 
-		var rawEvent Event
-		if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
-			if err == sql.ErrNoRows {
-				return resError(c, "not_found", 404)
-			}
-		}
-		event, err := getEvent(rawEvent, -1)
+		event, err := getEvent(eventID, -1)
 		if err != nil {
 			return err
 		}
@@ -973,7 +903,6 @@ func main() {
 		return renderReportCSV(c, reports)
 	}, adminLoginRequired)
 	e.GET("/admin/api/reports/sales", func(c echo.Context) error {
-
 		rows, err := db.Query("select r.*, s.rank as sheet_rank, s.num as sheet_num, s.price as sheet_price, e.id as event_id, e.price as event_price from reservations r inner join sheets s on s.id = r.sheet_id inner join events e on e.id = r.event_id order by reserved_at asc for update")
 		if err != nil {
 			return err
