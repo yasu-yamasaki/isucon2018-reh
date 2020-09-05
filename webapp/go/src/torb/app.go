@@ -215,7 +215,7 @@ func getEvents(ctx context.Context, all bool) ([]*Event, error) {
 		events = append(events, &event)
 	}
 	for i, v := range events {
-		event, err := getEvent(ctx, v.ID, -1)
+		event, err := getEvent(ctx, *v, -1)
 		if err != nil {
 			return nil, err
 		}
@@ -227,11 +227,7 @@ func getEvents(ctx context.Context, all bool) ([]*Event, error) {
 	return events, nil
 }
 
-func getEvent(ctx context.Context, eventID, loginUserID int64) (*Event, error) {
-	var event Event
-	if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&event.ID, &event.Title, &event.PublicFg, &event.ClosedFg, &event.Price); err != nil {
-		return nil, err
-	}
+func getEvent(ctx context.Context, event Event, loginUserID int64) (*Event, error) {
 	event.Sheets = map[string]*Sheets{
 		"S": &Sheets{},
 		"A": &Sheets{},
@@ -454,7 +450,11 @@ func main() {
 				return err
 			}
 
-			event, err := getEvent(ctx, reservation.EventID, -1)
+			var rawEvent Event
+			if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", reservation.EventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+				return err
+			}
+			event, err := getEvent(ctx, rawEvent, -1)
 			if err != nil {
 				return err
 			}
@@ -494,7 +494,12 @@ func main() {
 			if err := rows.Scan(&eventID); err != nil {
 				return err
 			}
-			event, err := getEvent(ctx, eventID, -1)
+
+			var rawEvent Event
+			if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+				return err
+			}
+			event, err := getEvent(ctx, rawEvent, -1)
 			if err != nil {
 				return err
 			}
@@ -572,7 +577,14 @@ func main() {
 			loginUserID = user.ID
 		}
 
-		event, err := getEvent(ctx, eventID, loginUserID)
+		var rawEvent Event
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+			if err == sql.ErrNoRows {
+				return resError(c, "not_found", 404)
+			}
+			return err
+		}
+		event, err := getEvent(ctx, rawEvent, loginUserID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -599,7 +611,14 @@ func main() {
 			return err
 		}
 
-		event, err := getEvent(ctx, eventID, user.ID)
+		var rawEvent Event
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+			if err == sql.ErrNoRows {
+				return resError(c, "invalid_event", 404)
+			}
+			return err
+		}
+		event, err := getEvent(ctx, rawEvent, user.ID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "invalid_event", 404)
@@ -668,7 +687,14 @@ func main() {
 			return err
 		}
 
-		event, err := getEvent(ctx, eventID, user.ID)
+		var rawEvent Event
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+			if err == sql.ErrNoRows {
+				return resError(c, "invalid_event", 404)
+			}
+			return err
+		}
+		event, err := getEvent(ctx, rawEvent, user.ID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "invalid_event", 404)
@@ -806,7 +832,11 @@ func main() {
 			return err
 		}
 
-		event, err := getEvent(ctx, eventID, -1)
+		var rawEvent Event
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+			return err
+		}
+		event, err := getEvent(ctx, rawEvent, -1)
 		if err != nil {
 			return err
 		}
@@ -818,7 +848,11 @@ func main() {
 		if err != nil {
 			return resError(c, "not_found", 404)
 		}
-		event, err := getEvent(ctx, eventID, -1)
+		var rawEvent Event
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+			return err
+		}
+		event, err := getEvent(ctx, rawEvent, -1)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -843,7 +877,14 @@ func main() {
 			params.Public = false
 		}
 
-		event, err := getEvent(ctx, eventID, -1)
+		var rawEvent Event
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+			if err == sql.ErrNoRows {
+				return resError(c, "not_found", 404)
+			}
+			return err
+		}
+		event, err := getEvent(ctx, rawEvent, -1)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -869,7 +910,10 @@ func main() {
 			return err
 		}
 
-		e, err := getEvent(ctx, eventID, -1)
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+			return err
+		}
+		e, err := getEvent(ctx, rawEvent, -1)
 		if err != nil {
 			return err
 		}
@@ -883,7 +927,11 @@ func main() {
 			return resError(c, "not_found", 404)
 		}
 
-		event, err := getEvent(ctx, eventID, -1)
+		var rawEvent Event
+		if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&rawEvent.ID, &rawEvent.Title, &rawEvent.PublicFg, &rawEvent.ClosedFg, &rawEvent.Price); err != nil {
+			return err
+		}
+		event, err := getEvent(ctx, rawEvent, -1)
 		if err != nil {
 			return err
 		}
